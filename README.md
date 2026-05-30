@@ -38,13 +38,15 @@ graph TD
 
 ## Dashboard Views
 
+![TfL Intelligence Dashboard](docs/images/tfl-intelligence-dashboard.png)
+
 | View | Description |
 |---|---|
 | Line Health Overview | Current status all TfL lines, health scores 0-100 |
 | Disruption Frequency | Disruptions per line last 7 days |
-| Time-of-Day Heatmap | Reliability by hour across lines |
-| Station Reliability | League table — most to least reliable |
-| Live Arrivals | Current wait times by line |
+| Station Reliability League Table | League table — most to least reliable |
+| Average Severity by Line | Average severity score by line |
+| Raw Data Volume | Rows ingested by hour |
 
 ---
 
