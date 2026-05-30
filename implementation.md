@@ -1194,3 +1194,169 @@ models). Adding a new source does not require modifying existing code.
 | **Alternatives** | UPSERT on line_id (keep only latest status), UPDATE in place |
 | **Reason chosen** | Append-only creates a complete time-series history enabling trend analysis, anomaly detection, and re-processing from source if transformations change. |
 | **Trade-offs** | Raw tables grow without bound. At 15-minute intervals ingesting 12 lines, `raw.line_status` grows by approximately 12 rows every 15 minutes — 576 rows/hour, ~4 million rows/year. Storage is cheap; historical data is valuable. A retention policy (`DELETE FROM raw.line_status WHERE ingested_at < NOW() - INTERVAL '90 days'`) can be added as a maintenance DAG. |
+
+---
+
+## Streamlit Dashboard
+
+The project now includes a custom Streamlit dashboard in `dashboard/app.py`.
+It complements Metabase by providing a portfolio-ready frontend with a
+controlled visual identity, custom interaction details, and direct
+presentation of the mart-layer metrics. Metabase remains useful for
+ad-hoc exploration, but the Streamlit dashboard gives the pipeline a
+designed product surface that can be run with one Compose service.
+
+### Why Streamlit in Addition to Metabase
+
+Metabase is excellent for quick BI dashboards and analyst-led charting.
+The custom Streamlit dashboard was built because it allows the project
+to demonstrate frontend engineering decisions that Metabase cannot
+express as precisely: branded layout, custom cards, animated live
+indicators, a dark theme, bespoke table badges, and Plotly chart theming.
+It also keeps the dashboard code version-controlled next to the pipeline,
+so the analytics experience can evolve through normal pull requests.
+
+### Design System Decisions
+
+The dashboard uses TfL identity colours as its primary structure:
+`#DC241F` for the red accent and live state, and `#003B8E` for headers
+and chart contrast. The England palette adds white text and alert red,
+while the dark background and surface colours keep the UI appropriate
+for monitoring live operational data. Headings use Times New Roman to
+create an editorial, civic feel, while body and data text use Inter for
+legibility in dense cards, tables, and axis labels.
+
+### PostgreSQL Connection
+
+Streamlit connects directly to PostgreSQL with `psycopg2`. The connection
+is configured entirely through environment variables:
+`POSTGRES_HOST`, `POSTGRES_PORT`, `POSTGRES_DB`, `POSTGRES_USER`, and
+`POSTGRES_PASSWORD`. Defaults are provided for local development, but
+the app does not hardcode credentials into the Python source. In Docker
+Compose, the dashboard service points `POSTGRES_HOST` to the `postgres`
+service name and reads `.env` from the mounted project file.
+
+### Auto-Refresh
+
+The app stores `last_refresh` and `refresh_interval` in Streamlit session
+state. Each render computes the remaining seconds and displays that in
+the sidebar. When the elapsed time exceeds the 60-second interval, the
+app updates `last_refresh` and calls `st.rerun()` so all SQL queries are
+executed again and the visualisations reflect the newest mart data.
+
+### Plotly Theme
+
+All Plotly figures use transparent or dark paper backgrounds, Inter axis
+labels, Times New Roman titles, muted gridlines, and the TfL red/blue
+palette. The disruption chart uses a red scale for line-level disruption
+rate, the severity heatmap moves from TfL blue to TfL red, and the raw
+volume chart uses a red line with a subtle filled area so ingestion
+activity is readable without overwhelming the dark interface.
+
+### Dashboard Panels
+
+**Line Health Cards** show the latest record per line from
+`marts.mart_line_performance`. Each card displays health score, service
+status, and disruption rate with colour coding for Good, Minor Issues,
+Severe Disruption, and Suspended.
+
+**Disruption Rate Chart** aggregates `marts.mart_disruption_trends` by
+line and orders the horizontal bars from worst to best, making the most
+affected lines immediately visible.
+
+**Station Reliability Table** reads `marts.mart_station_reliability` and
+shows ranked stations with total disruptions, daily average disruptions,
+and coloured reliability-grade badges.
+
+**Severity Heatmap** uses `marts.mart_line_performance` to compare
+average severity by line and hour of day. This makes time-of-day patterns
+visible as the dataset grows.
+
+**Data Volume Chart** reads from `raw.line_status` and counts rows by
+ingestion hour. It acts as a pipeline heartbeat, showing whether fresh
+raw data continues to arrive over time.
+
+### Data Quality Issue and Fix
+
+#### The Bug
+
+The Station Reliability table in the dashboard was displaying full TfL
+disruption advisory messages — paragraphs of operational text — in the
+station name column instead of clean station names like "Arsenal" or
+"Liverpool Street". The `mart_station_reliability` mart propagated
+whatever was stored in `raw.station_disruptions.station_name`, so the
+corruption appeared all the way through to the UI.
+
+#### Diagnosis
+
+Querying `raw.station_disruptions` directly revealed that the
+`station_name` column contained disruption message text for every row.
+The mart and staging layer both passed this field through without
+transformation, so the root cause had to be in the ingestion layer.
+
+Reading `ingestion/station_disruptions.py` identified two bugs:
+
+1. **No-affectedStops branch (line 34):** when the TfL API returns a
+   disruption with no `affectedStops` list, the fallback set
+   `station_name = disruption.get("description", "Unknown Station")`,
+   which picked up the full disruption message as the name.
+
+2. **affectedStops branch:** even when iterating `affectedStops`, the
+   code used `stop.get("commonName")`. For certain TfL disruption types
+   the `commonName` field is populated with the disruption message rather
+   than the stop name, so this path produced the same corruption.
+
+Both paths therefore wrote advisory text into `station_name` whenever
+the TfL API did not include a separate human-readable name field.
+
+#### Fix in the Ingestion Code
+
+A `TFL_STATION_NAMES` dict was added to `ingestion/tfl_client.py`,
+mapping each of the 21 monitored ATCO codes (e.g. `940GZZLUASL`) to its
+clean station name. Both branches of `ingest_station_disruptions` in
+`ingestion/station_disruptions.py` now perform a dict lookup first:
+
+```python
+# No-affectedStops branch
+station_id = disruption.get("stationAtcoCode", "")
+station_name = TFL_STATION_NAMES.get(station_id.upper(), "Unknown Station")
+
+# affectedStops branch
+stop_id = stop.get("atcoCode", "")
+stop_name = TFL_STATION_NAMES.get(
+    stop_id.upper(),
+    stop.get("commonName", "Unknown Station"),
+)
+```
+
+If the ATCO code is in the dict the clean name is used unconditionally.
+The API's `commonName` is only used for stops not in the monitored set,
+where the API value is likely to be reliable.
+
+#### Backfilling Existing Data
+
+The fix was applied retroactively to the 20 existing rows in
+`raw.station_disruptions` with an `UPDATE` keyed on `LOWER(station_id)`.
+After the raw table was corrected, `marts.mart_station_reliability` was
+rebuilt (`TRUNCATE` then `INSERT ... SELECT`) so the dashboard reflected
+the clean names immediately without waiting for the next ingestion cycle.
+
+#### Why This Matters for Data Engineering
+
+Raw API data is unreliable by default. The TfL disruption endpoint
+returns a single disruption object that simultaneously carries the
+affected stop list, the human-readable message, and structured metadata
+— and the mapping between fields is not consistent across disruption
+types. Trusting that `commonName` always contains a name, or that a
+named field will always contain the expected semantic content, is a
+common source of silent data corruption.
+
+The pattern that caught and fixed this issue is the correct one for data
+engineering in production: query the raw layer directly before
+diagnosing higher layers, isolate the ingestion code that writes the
+bad value, and use a controlled lookup (the `TFL_STATION_NAMES` dict)
+rather than trusting API field semantics. Backfilling raw data and
+rebuilding downstream marts completes the fix without requiring a full
+re-ingestion from the API. Being comfortable with all three steps —
+diagnosis, code fix, and data backfill — is a core data engineering
+skill that comes up in every pipeline that consumes external APIs.

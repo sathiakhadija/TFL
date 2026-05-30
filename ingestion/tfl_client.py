@@ -39,6 +39,30 @@ TFL_MAJOR_STATIONS = [
     "940GZZLUWTA",  # Waterloo
 ]
 
+TFL_STATION_NAMES = {
+    "940GZZLUASL": "Arsenal",
+    "940GZZLUBKF": "Blackfriars",
+    "940GZZLUBLM": "Balham",
+    "940GZZLUBND": "Bond Street",
+    "940GZZLUBKG": "Barking",
+    "940GZZLUCAL": "Caledonian Road",
+    "940GZZLUCAM": "Camden Town",
+    "940GZZLUCND": "Canary Wharf",
+    "940GZZLUCST": "Cannon Street",
+    "940GZZLUCHX": "Charing Cross",
+    "940GZZLUEUS": "Euston Square",
+    "940GZZLUKSX": "King's Cross St. Pancras",
+    "940GZZLULVT": "Liverpool Street",
+    "940GZZLULBN": "London Bridge",
+    "940GZZLUOXC": "Oxford Circus",
+    "940GZZLUPAC": "Paddington",
+    "940GZZLUSBC": "Shepherd's Bush Central",
+    "940GZZLUSTD": "Stratford",
+    "940GZZLUTAW": "Tottenham Court Road",
+    "940GZZLUVIC": "Victoria",
+    "940GZZLUWTA": "Waterloo",
+}
+
 
 class TfLClient:
     """

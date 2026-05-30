@@ -38,7 +38,7 @@ graph TD
 
 ## Dashboard Views
 
-![TfL Intelligence Dashboard](docs/images/tfl-intelligence-dashboard.png)
+<!-- Dashboard screenshot will be added after first run -->
 
 | View | Description |
 |---|---|
@@ -47,6 +47,33 @@ graph TD
 | Station Reliability League Table | League table — most to least reliable |
 | Average Severity by Line | Average severity score by line |
 | Raw Data Volume | Rows ingested by hour |
+
+---
+
+## Custom Dashboard
+
+A production-grade Streamlit dashboard built with TfL and England
+identity design system.
+
+**Run locally:**
+```bash
+docker compose up dashboard
+# Open http://localhost:8501
+```
+
+**Design system:**
+- TfL roundel red `#DC241F` and blue `#003B8E`
+- England flag palette
+- Times New Roman headings
+- Auto-refresh every 60 seconds
+- Live PostgreSQL connection to marts schema
+
+**Views:**
+- Line Health Cards — health score per line with colour coding
+- Disruption Rate Chart — horizontal bar, worst to best
+- Station Reliability Table — ranked with grade badges
+- Severity Heatmap — lines vs hours of day
+- Data Volume Chart — ingestion rate over time
 
 ---
 

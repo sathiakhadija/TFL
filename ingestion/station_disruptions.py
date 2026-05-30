@@ -1,7 +1,7 @@
 import logging
 from datetime import datetime, timezone
 
-from ingestion.tfl_client import TfLClient
+from ingestion.tfl_client import TfLClient, TFL_STATION_NAMES
 
 logger = logging.getLogger(__name__)
 
@@ -31,7 +31,9 @@ def ingest_station_disruptions(conn, client: TfLClient) -> int:
             if not affected_stops:
                 # Use the disruption-level station info if no affectedStops
                 station_id = disruption.get("stationAtcoCode", "")
-                station_name = disruption.get("description", "Unknown Station")
+                station_name = TFL_STATION_NAMES.get(
+                    station_id.upper(), "Unknown Station"
+                )
                 cur.execute(
                     """
                     INSERT INTO raw.station_disruptions (
@@ -52,6 +54,11 @@ def ingest_station_disruptions(conn, client: TfLClient) -> int:
                 rows_inserted += 1
             else:
                 for stop in affected_stops:
+                    stop_id = stop.get("atcoCode", "")
+                    stop_name = TFL_STATION_NAMES.get(
+                        stop_id.upper(),
+                        stop.get("commonName", "Unknown Station"),
+                    )
                     cur.execute(
                         """
                         INSERT INTO raw.station_disruptions (
@@ -60,8 +67,8 @@ def ingest_station_disruptions(conn, client: TfLClient) -> int:
                         ) VALUES (%s, %s, %s, %s, %s, %s, %s)
                         """,
                         (
-                            stop.get("atcoCode", ""),
-                            stop.get("commonName", "Unknown Station"),
+                            stop_id,
+                            stop_name,
                             disruption.get("type"),
                             disruption.get("category"),
                             disruption.get("description"),
