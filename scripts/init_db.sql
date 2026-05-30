@@ -1,6 +1,11 @@
 -- TfL Intelligence Pipeline — Database Initialisation
 -- Idempotent: safe to run multiple times
 
+-- Metabase stores its own application metadata. Keep it separate from the
+-- Airflow/TfL database because both apps use tables named "session".
+SELECT 'CREATE DATABASE metabase'
+WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'metabase')\gexec
+
 -- ─────────────────────────────────────────────────────────
 -- Schemas
 -- ─────────────────────────────────────────────────────────
