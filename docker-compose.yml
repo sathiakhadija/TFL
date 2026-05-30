@@ -1,0 +1,120 @@
+version: "3.8"
+
+services:
+
+  postgres:
+    image: postgres:15
+    environment:
+      POSTGRES_DB: tfl_pipeline
+      POSTGRES_USER: tfl_user
+      POSTGRES_PASSWORD: tfl_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./scripts/init_db.sql:/docker-entrypoint-initdb.d/init_db.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U tfl_user -d tfl_pipeline"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  airflow-init:
+    build:
+      context: .
+      dockerfile: Dockerfile.airflow
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://tfl_user:tfl_password@postgres:5432/tfl_pipeline
+      - AIRFLOW__CORE__EXECUTOR=LocalExecutor
+      - AIRFLOW__CORE__LOAD_EXAMPLES=False
+      - AIRFLOW__WEBSERVER__SECRET_KEY=tfl-pipeline-secret
+    command: >
+      bash -c "airflow db migrate &&
+               airflow users create
+               --username admin
+               --password admin
+               --firstname Admin
+               --lastname User
+               --role Admin
+               --email admin@tfl-pipeline.local"
+    restart: on-failure
+
+  airflow-webserver:
+    build:
+      context: .
+      dockerfile: Dockerfile.airflow
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "8080:8080"
+    environment:
+      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://tfl_user:tfl_password@postgres:5432/tfl_pipeline
+      - AIRFLOW__CORE__EXECUTOR=LocalExecutor
+      - AIRFLOW__CORE__LOAD_EXAMPLES=False
+      - AIRFLOW__WEBSERVER__SECRET_KEY=tfl-pipeline-secret
+      - TFL_API_KEY=${TFL_API_KEY}
+      - TFL_APP_ID=${TFL_APP_ID}
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_DB=tfl_pipeline
+      - POSTGRES_USER=tfl_user
+      - POSTGRES_PASSWORD=tfl_password
+      - DBT_PROFILES_DIR=/opt/airflow/dbt_project
+    volumes:
+      - ./dags:/opt/airflow/dags
+      - ./ingestion:/opt/airflow/ingestion
+      - ./dbt_project:/opt/airflow/dbt_project
+      - ./logs:/opt/airflow/logs
+    command: webserver
+    restart: unless-stopped
+
+  airflow-scheduler:
+    build:
+      context: .
+      dockerfile: Dockerfile.airflow
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://tfl_user:tfl_password@postgres:5432/tfl_pipeline
+      - AIRFLOW__CORE__EXECUTOR=LocalExecutor
+      - AIRFLOW__CORE__LOAD_EXAMPLES=False
+      - AIRFLOW__WEBSERVER__SECRET_KEY=tfl-pipeline-secret
+      - TFL_API_KEY=${TFL_API_KEY}
+      - TFL_APP_ID=${TFL_APP_ID}
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_DB=tfl_pipeline
+      - POSTGRES_USER=tfl_user
+      - POSTGRES_PASSWORD=tfl_password
+      - DBT_PROFILES_DIR=/opt/airflow/dbt_project
+    volumes:
+      - ./dags:/opt/airflow/dags
+      - ./ingestion:/opt/airflow/ingestion
+      - ./dbt_project:/opt/airflow/dbt_project
+      - ./logs:/opt/airflow/logs
+    command: scheduler
+    restart: unless-stopped
+
+  metabase:
+    image: metabase/metabase:latest
+    ports:
+      - "3000:3000"
+    environment:
+      MB_DB_TYPE: postgres
+      MB_DB_DBNAME: tfl_pipeline
+      MB_DB_PORT: 5432
+      MB_DB_USER: tfl_user
+      MB_DB_PASS: tfl_password
+      MB_DB_HOST: postgres
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  postgres_data:

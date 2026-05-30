@@ -1,0 +1,34 @@
+version: 2
+sources:
+  - name: raw
+    schema: raw
+    tables:
+      - name: line_status
+        description: "Raw line status data ingested from TfL API"
+        columns:
+          - name: id
+            tests: [not_null, unique]
+          - name: line_id
+            tests: [not_null]
+          - name: status_severity
+            tests: [not_null]
+          - name: ingested_at
+            tests: [not_null]
+      - name: line_arrivals
+        description: "Raw arrival predictions from TfL API"
+        columns:
+          - name: id
+            tests: [not_null, unique]
+          - name: line_id
+            tests: [not_null]
+          - name: station_id
+            tests: [not_null]
+          - name: time_to_station
+            tests: [not_null]
+      - name: station_disruptions
+        description: "Raw station disruption data from TfL API"
+        columns:
+          - name: id
+            tests: [not_null, unique]
+          - name: station_id
+            tests: [not_null]

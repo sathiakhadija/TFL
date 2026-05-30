@@ -1,0 +1,37 @@
+version: 2
+models:
+  - name: mart_line_performance
+    description: >
+      Hourly line performance metrics with health scores.
+      Health score 0-100: higher is better.
+      Updated every 15 minutes by the ingestion pipeline.
+    columns:
+      - name: line_id
+        tests: [not_null]
+      - name: health_score
+        tests: [not_null]
+      - name: service_status
+        tests:
+          - accepted_values:
+              values: ["Good", "Minor Issues",
+                       "Severe Disruption", "Suspended"]
+  - name: mart_station_reliability
+    description: >
+      Station-level reliability rankings based on
+      historical disruption data.
+    columns:
+      - name: station_id
+        tests: [not_null, unique]
+      - name: reliability_grade
+        tests:
+          - accepted_values:
+              values: ["Excellent", "Good", "Fair", "Poor"]
+  - name: mart_disruption_trends
+    description: >
+      Daily disruption trends per line with
+      day-over-day severity change.
+    columns:
+      - name: trend_date
+        tests: [not_null]
+      - name: line_id
+        tests: [not_null]
