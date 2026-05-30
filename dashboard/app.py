@@ -1613,7 +1613,6 @@ def render_header(df_performance: pd.DataFrame, df_volume: pd.DataFrame):
     """
     st.markdown(header_html, unsafe_allow_html=True)
     st.markdown(kpi_html, unsafe_allow_html=True)
-    st.markdown(header_html, unsafe_allow_html=True)
 
 
 def render_sidebar(df_performance: pd.DataFrame):
